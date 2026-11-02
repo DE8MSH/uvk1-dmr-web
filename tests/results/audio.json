@@ -1,39 +1,39 @@
 {
   "44100": {
     "before": {
-      "zeros": 738,
-      "energy": 29577.875,
+      "zeros": 3398,
+      "energy": 27347.625,
       "underruns": 0
     },
     "after": {
       "zeros": 0,
-      "energy": 29624,
+      "energy": 27560,
       "underruns": 0,
       "overflows": 0
     }
   },
   "48000": {
     "before": {
-      "zeros": 832,
-      "energy": 32204,
+      "zeros": 3648,
+      "energy": 29772,
       "underruns": 0
     },
     "after": {
       "zeros": 0,
-      "energy": 32256,
+      "energy": 30000,
       "underruns": 0,
       "overflows": 0
     }
   },
   "clockDrift": {
     "before": {
-      "zeros": 6464,
-      "energy": 355844,
+      "zeros": 5696,
+      "energy": 353636,
       "underruns": 0
     },
     "after": {
       "zeros": 0,
-      "energy": 356248,
+      "energy": 353992,
       "underruns": 0,
       "overflows": 0
     }

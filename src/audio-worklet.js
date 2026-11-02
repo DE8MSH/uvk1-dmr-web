@@ -3,9 +3,11 @@
 class K1Audio extends AudioWorkletProcessor {
  constructor() {
   super();this.samples=new Float32Array(8192);this.read=0;this.write=0;
-  this.target=1280;this.maximum=3200;this.started=false;this.ticks=0;
+  this.target=2560;this.maximum=4480;this.inputPort=null;this.started=false;this.ticks=0;
   this.underruns=0;this.overflows=0;
-  this.port.onmessage=e=>{
+  this.receive=e=>{
+   if(e.data.type==='bind'){if(this.inputPort)this.inputPort.close();this.inputPort=e.data.port;this.inputPort.onmessage=this.receive;this.inputPort.start();return;}
+   if(e.data.type==='config'){const ms=Math.max(80,Math.min(480,Number(e.data.bufferMs)||320));this.target=ms*8;this.maximum=this.target+1920;this.read=this.write=0;this.started=false;return;}
    if(e.data.type==='clear'){this.read=this.write=0;this.started=false;return;}
    if(e.data.type!=='pcm' || !e.data.pcm?.length)return;
    let pcm=e.data.pcm;
@@ -13,6 +15,7 @@ class K1Audio extends AudioWorkletProcessor {
    if(this.write-this.read+pcm.length>this.maximum){this.read=this.write-(this.maximum-pcm.length);this.overflows++;}
    for(let i=0;i<pcm.length;i++)this.samples[this.write++&8191]=pcm[i];
   };
+  this.port.onmessage=this.receive;
  }
  process(inputs,outputs) {
   const out=outputs[0][0];out.fill(0);
@@ -30,7 +33,7 @@ class K1Audio extends AudioWorkletProcessor {
    }
   }
   this.ticks+=out.length;
-  if(this.ticks>=sampleRate){this.ticks=0;this.port.postMessage({type:'audioStats',bufferMs:Math.round((this.write-this.read)/8),underruns:this.underruns,overflows:this.overflows});}
+  if(this.ticks>=sampleRate){this.ticks=0;this.port.postMessage({type:'audioStats',targetMs:this.target/8,direct:!!this.inputPort,bufferMs:Math.round((this.write-this.read)/8),underruns:this.underruns,overflows:this.overflows});}
   return true;
  }
 }

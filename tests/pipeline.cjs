@@ -17,5 +17,5 @@ const blob=require('./make-usb-fixture.cjs')();
   result.push({name,chunk,workerMessages:next,elapsedMs,counts,energy});await w.terminate();
  }
  assert.deepEqual(result[0].counts,result[1].counts);for(const slot of [1,2])assert(Math.abs(result[0].energy[slot]-result[1].energy[slot])<1e-4);
- console.log('PASS real WASM worker: both slots, 144 AMBE frames, identical PCM counts and energy');console.log(JSON.stringify(result,null,2));fs.writeFileSync(__dirname+'/results/pipeline.json',JSON.stringify(result,null,2));
+ console.log('PASS real WASM worker: both slots, 144 AMBE frames, identical PCM counts and energy');console.log(JSON.stringify(result,null,2));fs.writeFileSync(__dirname+'/results/pipeline-0.1.2.json',JSON.stringify(result,null,2));
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -8,7 +8,7 @@ let lastInputWall=-Infinity;
 // stop host-side bulk reads and fill the radio's much smaller USB buffer.
 const rxChunks=[];
 let rxBytes=0,rxBusy=false,rxTimer=0,rxEpoch=0;
-const perf={decodeMs:0,maxDecodeMs:0,batches:0,peakQueuedBytes:0,bufferMs:0,underruns:0,overflows:0};
+const perf={decodeMs:0,maxDecodeMs:0,batches:0,peakQueuedBytes:0,bufferMs:0,underruns:0,overflows:0,directAudio:false};
 function clearReceiveQueue(){rxEpoch++;rxChunks.length=0;rxBytes=0;rxBusy=false;if(rxTimer)clearTimeout(rxTimer);rxTimer=0;}
 function flushReceive(){
  rxTimer=0;if(rxBusy||!rxBytes||!link)return;
@@ -21,10 +21,12 @@ function flushReceive(){
 }
 let id=0, bytes=0, startTime=0, lastFrameWall=0, lastFrames=0, chosenSlot=-1, audioCtx=null,audioNode=null,gainNode=null,audioOn=false;
 let lastAudio=[-Infinity,-Infinity,-Infinity], logStart=performance.now(), replayMarked=false;
-const settings={eq:true,lf:0,gain:8,invert:false,bw:0};
+const settings={eq:true,lf:0,gain:8,invert:false,bw:0,bufferMs:320};
 try{Object.assign(settings,JSON.parse(localStorage.getItem('k1-dmr-web-options')||'{}'));}catch{}
 for(const key of ['eq','invert'])$('#'+key).checked=!!settings[key];
 for(const key of ['lf','gain','bw'])$('#'+key).value=settings[key];
+$('#audio-buffer').value=String([160,320,480].includes(Number(settings.bufferMs))?Number(settings.bufferMs):320);
+function audioSettings(){if(worker&&wasmReady)worker.postMessage({type:'audioSettings',enabled:audioOn,slot:$('#slot').value});}
 function log(text){logLines.push(new Date().toLocaleTimeString('de-DE')+'  '+text);if(logLines.length>100)logLines.shift();$('#log').textContent=logLines.join('\n');}
 function error(e){$('#error').textContent=e?.message||String(e);log($('#error').textContent);}
 function setDot(name,on){$('#dot-'+name).classList.toggle('on',!!on);}
@@ -110,6 +112,7 @@ function initWorker(){
    const m=e.data;
    if(m.type==='ready'){wasmReady=true;$('#decoder-status').textContent='WASM DECODER BEREIT';$('#connect').disabled=!capability();$('#audio').disabled=false;$('#selftest').disabled=false;opts();log('WebAssembly und AMBE-Sprachdecoder geladen. Keine Netzwerkverbindung erforderlich.');autoFind();}
    else if(m.type==='state')update(m.data);
+   else if(m.type==='audioChoice'){chosenSlot=m.slot;drawCards();}
    else if(m.type==='audio')audioPacket(m.slot,m.pcm);
    else if(m.type==='consumed'){if(Number.isFinite(m.ms)){perf.decodeMs+=m.ms;perf.maxDecodeMs=Math.max(perf.maxDecodeMs,m.ms);perf.batches++;}const p=pending.get(m.id);if(p){clearTimeout(p.t);pending.delete(m.id);p.resolve();}}
    else if(m.type==='error'){const p=pending.get(m.id);if(p){clearTimeout(p.t);pending.delete(m.id);p.reject(new Error(m.text));}error(m.text);}
@@ -178,7 +181,7 @@ async function connect(known=null){
  finally{connecting=false;$('#connect').disabled=!!link||!wasmReady||!capability();}
 }
 async function disconnect(message='Verbindung getrennt.'){
- if(closing)return;closing=true;const active=link;link=null;clearReceiveQueue();verified=false;$('#tune').disabled=true;setDot('usb',false);setDot('bridge',false);
+ if(closing)return;closing=true;if(worker&&wasmReady)worker.postMessage({type:'reset'});const active=link;link=null;clearReceiveQueue();verified=false;$('#tune').disabled=true;setDot('usb',false);setDot('bridge',false);
  try{if(active)await active.close();}catch(e){log('Beim Schließen: '+e.message);}finally{closing=false;$('#disconnect').disabled=true;$('#connect').disabled=!wasmReady||!capability();$('#connection').textContent=message;$('#radio-state').textContent='K1 mit USB-C verbinden. Digi Bridge: F + 7.';if(audioNode)audioNode.port.postMessage({type:'clear'});log(message);}
 }
 async function autoFind(){
@@ -190,21 +193,22 @@ async function autoFind(){
  }catch(e){log('Gerätesuche: '+e.message);}
 }
 async function enableAudio(){
- if(audioOn){audioOn=false;$('#audio').textContent='Ton einschalten';if(audioNode)audioNode.port.postMessage({type:'clear'});return;}
+ if(audioOn){audioOn=false;audioSettings();$('#audio').textContent='Ton einschalten';if(audioNode)audioNode.port.postMessage({type:'clear'});return;}
  try{
   if(!audioCtx){
-   audioCtx=new (window.AudioContext||window.webkitAudioContext)();await audioCtx.resume();
+   audioCtx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'playback'});await audioCtx.resume();
    if(!audioCtx.audioWorklet)throw new Error('AudioWorklet wird in diesem Browser-Kontext nicht angeboten.');
    const source=__AUDIO_WORKLET_SOURCE__;
    const u=URL.createObjectURL(new Blob([source],{type:'application/javascript'}));await audioCtx.audioWorklet.addModule(u);URL.revokeObjectURL(u);
-   audioNode=new AudioWorkletNode(audioCtx,'k1-audio',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[1]});audioNode.port.onmessage=e=>{if(e.data.type==='audioStats'){Object.assign(perf,{bufferMs:e.data.bufferMs,underruns:e.data.underruns,overflows:e.data.overflows});$('#audio-state').textContent='Puffer '+e.data.bufferMs+' ms · Nachpufferungen '+e.data.underruns;}};gainNode=audioCtx.createGain();gainNode.gain.value=Number($('#volume').value);audioNode.connect(gainNode).connect(audioCtx.destination);
+   audioNode=new AudioWorkletNode(audioCtx,'k1-audio',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[1]});const channel=new MessageChannel();audioNode.port.postMessage({type:'bind',port:channel.port1},[channel.port1]);worker.postMessage({type:'audioPort',port:channel.port2},[channel.port2]);audioNode.port.postMessage({type:'config',bufferMs:Number($('#audio-buffer').value)});perf.directAudio=true;audioNode.port.onmessage=e=>{if(e.data.type==='audioStats'){Object.assign(perf,{bufferMs:e.data.bufferMs,targetMs:e.data.targetMs,directAudio:e.data.direct,underruns:e.data.underruns,overflows:e.data.overflows});$('#audio-state').textContent='Direktaudio · Puffer '+e.data.bufferMs+'/'+e.data.targetMs+' ms · Nachpufferungen '+e.data.underruns;}};gainNode=audioCtx.createGain();gainNode.gain.value=Number($('#volume').value);audioNode.connect(gainNode).connect(audioCtx.destination);
   }
-  await audioCtx.resume();audioOn=true;$('#audio').textContent='Ton ausschalten';$('#audio-state').textContent='Audio bereit · '+audioCtx.sampleRate+' Hz Ausgabe';log('Audioausgabe eingeschaltet.');
+  await audioCtx.resume();audioOn=true;audioSettings();$('#audio').textContent='Ton ausschalten';$('#audio-state').textContent='Audio bereit · '+audioCtx.sampleRate+' Hz Ausgabe';log('Audioausgabe eingeschaltet.');
  }catch(e){if(audioCtx&&!audioNode){await audioCtx.close();audioCtx=null;}error(e);}
 }
 $('#connect').onclick=()=>connect();$('#disconnect').onclick=()=>disconnect();$('#audio').onclick=enableAudio;
 $('#volume').oninput=()=>{if(gainNode)gainNode.gain.value=Number($('#volume').value);};
-$('#slot').onchange=()=>{chosenSlot=$('#slot').value==='auto'?-1:Number($('#slot').value);if(audioNode)audioNode.port.postMessage({type:'clear'});drawCards();};
+$('#slot').onchange=()=>{audioSettings();chosenSlot=$('#slot').value==='auto'?-1:Number($('#slot').value);if(audioNode)audioNode.port.postMessage({type:'clear'});drawCards();};
+$('#audio-buffer').onchange=()=>{settings.bufferMs=Number($('#audio-buffer').value);try{localStorage.setItem('k1-dmr-web-options',JSON.stringify(settings));}catch{}if(audioNode)audioNode.port.postMessage({type:'config',bufferMs:settings.bufferMs});};
 $('#transport').onchange=()=>{$('#connect').onclick=()=>connect();$('#connect').textContent='K1 verbinden';autoFind();};
 $('#tuneform').onsubmit=async e=>{e.preventDefault();const t=$('#freq').value.trim().replace(/\s+/g,'').replace(',','.');if(!/^\d+(\.\d+)?$/.test(t)){error('Frequenz als MHz oder Hz eingeben.');return;}const v=Number(t),hz=Math.round((v<10000?v*1e6:v)/10)*10;if(hz<18000000||hz>1300000000){error('Empfangsfrequenz: 18–1300 MHz.');return;}try{await send(command(0x80,hz/10));$('#radio-state').textContent='Abstimmung angefordert · Bestätigung folgt im K1-Statuspaket.';}catch(e){error(e);}};
 for(const key of ['eq','lf','gain','invert'])$('#'+key).onchange=opts;
@@ -212,7 +216,7 @@ $('#bw').onchange=()=>{opts();if(verified)send(command(0x81,settings.bw)).catch(
 $('#clear').onclick=()=>{rows.length=0;drawHistory();};
 function csvLine(line){const out=[];let s='',q=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(q&&line[i+1]==='"'){s+='"';i++;}else q=!q;}else if(c===','&&!q){out.push(s);s='';}else s+=c;}out.push(s);return out;}
 $('#radioid').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{if(f.size>100e6)throw new Error('CSV-Datei ist größer als 100 MB.');const lines=(await f.text()).replace(/^\uFEFF/,'').split(/\r?\n/);byId.clear();let imported=0;for(const line of lines){if(++imported%2000===0)await sleep(0);const c=csvLine(line);if(/^\d+$/.test(c[0])&&c[1])byId.set(+c[0],{call:c[1],name:[c[2],c[3]].filter(Boolean).join(' '),where:[c[4],c[5],c[6]].filter(Boolean).join(', ')});}$('#db-state').textContent=byId.size.toLocaleString('de-DE')+' Rufzeichen lokal geladen.';drawCards();drawHistory();}catch(e){error(e);}};
-$('#save-log').onclick=()=>{const b=new Blob([JSON.stringify({version:'0.1.1',performance:perf,userAgent:navigator.userAgent,protocol:location.protocol,secure:isSecureContext,log:logLines,state},null,2)],{type:'application/json'});download(b,'K1_DMR_Diagnose.json');};
+$('#save-log').onclick=()=>{const b=new Blob([JSON.stringify({version:'0.1.2',performance:perf,userAgent:navigator.userAgent,protocol:location.protocol,secure:isSecureContext,log:logLines,state},null,2)],{type:'application/json'});download(b,'K1_DMR_Diagnose.json');};
 function download(blob,name){const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function wavPCM(buffer){const dv=new DataView(buffer);if(dv.byteLength<44||dv.getUint32(0,false)!==0x52494646||dv.getUint32(8,false)!==0x57415645)throw new Error('Keine RIFF-WAV-Datei.');let fmt=null,data=null;for(let p=12;p+8<=dv.byteLength;){const size=dv.getUint32(p+4,true),end=p+8+size;if(end>dv.byteLength)throw new Error('Beschädigte WAV-Chunk-Länge.');const name=dv.getUint32(p,false);if(name===0x666d7420&&size>=16)fmt={format:dv.getUint16(p+8,true),channels:dv.getUint16(p+10,true),rate:dv.getUint32(p+12,true),bits:dv.getUint16(p+22,true)};if(name===0x64617461)data=buffer.slice(p+8,end);p=end+(size&1);}if(!fmt||!data||fmt.format!==1||fmt.channels!==1||fmt.rate!==48000||fmt.bits!==16)throw new Error('WAV muss PCM16, Mono, 48 kHz enthalten (Diskriminatorsignal, keine Sprachaufnahme).');return data;}

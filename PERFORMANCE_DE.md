@@ -1,3 +1,5 @@
+Aktuell: [0.1.2 – direkter Audiokanal](PERFORMANCE_0.1.2_DE.md). Die folgenden Messwerte dokumentieren den vorherigen Stand 0.1.1.
+
 # K1 DMR Web 0.1.1 – weniger Aussetzer bei USB und Audio
 
 Die fertige `index.html` bleibt eine Einzeldatei. WebAssembly-Decoder, AMBE-Code und eingebetteter Selbsttest sind gegenüber dem Ausgangsstand unverändert. Änderungen betreffen Datentransport, Audiopufferung und Oberflächenarbeit.

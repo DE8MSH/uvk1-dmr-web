@@ -1,0 +1,6 @@
+{
+  "mainBlockedMs": 450,
+  "firstAudioDuringBlockMs": 30,
+  "pcmSamples": 11520,
+  "nonzeroRenderedSamples": 18688
+}
