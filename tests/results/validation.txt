@@ -1,0 +1,85 @@
+PASS WebUSB CDC configuration, nonzero interface index, alternate, DTR/RTS, bulk OUT and clean close
+PASS rejected DTR cannot be reported as connected
+PASS Web Serial opens 115200/8N1, asserts DTR/RTS and releases the port
+PASS radio frequency command is little endian with correct XOR
+PASS 140 fragmented USB reads -> 2 worker batches, exact byte order, no decoder wait in USB read path
+PASS stale completion cannot release a new session batch
+PASS bounded receive queue detects overload and closes transport
+PASS jitter simulation at 44.1/48 kHz: no mid-call silence with delayed ordered packets
+PASS bounded audio latency after stalls and clear on slot/session change
+{
+  "44100": {
+    "before": {
+      "zeros": 738,
+      "energy": 29577.875,
+      "underruns": 0
+    },
+    "after": {
+      "zeros": 0,
+      "energy": 29624,
+      "underruns": 0,
+      "overflows": 0
+    }
+  },
+  "48000": {
+    "before": {
+      "zeros": 832,
+      "energy": 32204,
+      "underruns": 0
+    },
+    "after": {
+      "zeros": 0,
+      "energy": 32256,
+      "underruns": 0,
+      "overflows": 0
+    }
+  },
+  "clockDrift": {
+    "before": {
+      "zeros": 6464,
+      "energy": 355844,
+      "underruns": 0
+    },
+    "after": {
+      "zeros": 0,
+      "energy": 356248,
+      "underruns": 0,
+      "overflows": 0
+    }
+  }
+}
+PASS real WASM worker: both slots, 144 AMBE frames, identical PCM counts and energy
+[
+  {
+    "name": "before",
+    "chunk": 64,
+    "workerMessages": 2639,
+    "elapsedMs": 259.742259,
+    "counts": [
+      0,
+      11520,
+      11520
+    ],
+    "energy": [
+      0,
+      121.36714898142964,
+      151.72906913422048
+    ]
+  },
+  {
+    "name": "after",
+    "chunk": 4096,
+    "workerMessages": 43,
+    "elapsedMs": 113.34069899999997,
+    "counts": [
+      0,
+      11520,
+      11520
+    ],
+    "energy": [
+      0,
+      121.36714898142964,
+      151.72906913422048
+    ]
+  }
+]
