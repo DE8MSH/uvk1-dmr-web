@@ -4,7 +4,7 @@ PASS real WASM worker: both slots, 144 AMBE frames, identical PCM counts and ene
     "name": "before",
     "chunk": 64,
     "workerMessages": 2639,
-    "elapsedMs": 220.276184,
+    "elapsedMs": 179.60227400000002,
     "counts": [
       0,
       11520,
@@ -20,7 +20,7 @@ PASS real WASM worker: both slots, 144 AMBE frames, identical PCM counts and ene
     "name": "after",
     "chunk": 4096,
     "workerMessages": 43,
-    "elapsedMs": 99.24207300000006,
+    "elapsedMs": 91.33787000000001,
     "counts": [
       0,
       11520,

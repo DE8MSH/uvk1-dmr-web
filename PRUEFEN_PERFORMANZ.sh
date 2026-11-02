@@ -6,3 +6,4 @@ node tests/transport.cjs
 node tests/queue.cjs
 node tests/audio.cjs
 node tests/pipeline.cjs
+node tests/direct-audio.cjs

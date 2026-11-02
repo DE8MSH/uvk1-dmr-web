@@ -3,7 +3,7 @@
     "name": "before",
     "chunk": 64,
     "workerMessages": 2639,
-    "elapsedMs": 220.276184,
+    "elapsedMs": 202.06987,
     "counts": [
       0,
       11520,
@@ -19,7 +19,7 @@
     "name": "after",
     "chunk": 4096,
     "workerMessages": 43,
-    "elapsedMs": 99.24207300000006,
+    "elapsedMs": 81.48458600000004,
     "counts": [
       0,
       11520,
